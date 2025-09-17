@@ -34,3 +34,6 @@ bin/
 ##ignore /idea
 .idea
 Firemetrics.iml
+/out/
+.gradle
+/build
