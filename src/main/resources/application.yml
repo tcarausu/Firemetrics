@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fhir
+    #will add this to k8s secrets or vault
+    username: fhir
+    password: fhir
+    hikari:
+      # Set up to 10 connections.
+      maximum-pool-size: 10
+      # Wait 5 seconds for DB to start. If not failing it.
+      initializationFailTimeout: 5000
+  jackson:
+    default-property-inclusion: non_null
+  sql:
+    init:
+      mode: never
+
+server:
+  #using port 8081 to avoid conflict with Apache Tomcat
+  port: 8081
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # add more if you want: loggers,env,thread dump
+        include: health,info,metrics
+  endpoint:
+    health:
+      # show 'db' component in the response
+      show-details: always
+      probes:
+        # adds liveness/readiness groups if you want them
+        enabled: true
