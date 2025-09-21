@@ -5,6 +5,7 @@ spring:
     username: fhir
     password: fhir
     hikari:
+      connectionInitSql: "SET search_path = fhir_ext, public"
       # Set up to 10 connections.
       maximum-pool-size: 10
       # Wait 5 seconds for DB to start. If not failing it.

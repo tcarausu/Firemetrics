@@ -1,13 +1,13 @@
-# Firemetrics FHIR (R4B) – Patient (Kotlin + Python) 
+# Firemetrics FHIR (R4B) – Patient (Kotlin) 
 
 The Goal for this project is/was to create a solution usable in the context of Firemetrics using the 2 languages I felt 
-most comfortable with (Kotlin/Java and Python).
+most comfortable with (Kotlin/Java).
 
 The task requires the use of FHIR (Healthcare data), the use of Postgres with personally created/developed Extensions. 
-Hence I decided on the use of Kotlin/Spring Boot for the backend, and Python/FastAPI for the minimal frontend. With most early 
+Hence I decided on the use of Kotlin/Spring Boot for the backend. With most early 
 tests (FAST API) done using Postman for easier checks, data collection and debugging.
 
-Minimal FHIR **Patient** service in two stacks (Kotlin/Spring Boot on Java 21, Python/FastAPI on 3.12/3.13), backed by
+Minimal FHIR **Patient** service in two stacks (Kotlin 2.1 with Spring Boot on Java 21), backed by
 Postgres 17 (**via a custom extension**). All persistence and queries go through the extension (no direct ORM/Hibernate access).
 If I get there in due time I will create a **Rust** version/plugin.
 
@@ -35,6 +35,7 @@ with a custom extension, FHIR REST API with search and pagination.
 SELECT fhir_put('Patient', $jsonb)                -- → uuid (new id)
 SELECT fhir_get('Patient', $uuid)                 -- → jsonb
 SELECT fhir_search('Patient', $param, $op, $value) -- → setof uuid
+SELECT fhir_count('Patient', $jsonb)               -- → long (for pagination) / added for count perhaps quicker
 
 ```
 * You may explore [PGRX](https://github.com/pgcentralfoundation/pgrx) as a way to build Postgres extensions ergonomically.
@@ -51,6 +52,11 @@ SELECT fhir_search('Patient', $param, $op, $value) -- → setof uuid
 * Resources are persisted and queried via the extension, not direct ad‑hoc SQL against app tables.
 * Search supports name substring, birthdate ranges (`ge/le`), and gender; pagination is stable.
 * Tests are automated and reproducible.
+
+
+### Notes
+
+- **birthDate** must be a full date: `YYYY-MM-DD`. Partial dates are not accepted in this slice.
 
 ---
 
@@ -69,7 +75,7 @@ docker compose up -d
 ./gradlew bootRun
 ```
 
-Server will start on `http://localhost:8080`.
+Server will start on `http://localhost:8081`.
 
 ### Run the server (Python/FastAPI)
 
@@ -107,7 +113,7 @@ curl -i -H "Content-Type: application/fhir+json" \
     "gender": "female",
     "birthDate": "1990-05-01"
   }' \
-  http://localhost:8080/fhir/Patient
+  http://localhost:8081/fhir/Patient
 ```
 
 **Response headers:**
@@ -122,22 +128,22 @@ Last-Modified: Fri, 19 Sep 2025 10:15:30 GMT
 ### Get patient by ID
 
 ```bash
-curl -s http://localhost:8080/fhir/Patient/550e8400-e29b-41d4-a716-446655440000
+curl -s http://localhost:8081/fhir/Patient/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ### Search patients
 
 ```bash
-curl -s 'http://localhost:8080/fhir/Patient?name=doe&gender=female&birthdate:ge=1980-01-01&_count=10&_offset=0'
+curl -s 'http://localhost:8081/fhir/Patient?name=doe&gender=female&birthdate:ge=1980-01-01&_count=10&_offset=0'
 ```
 
 ---
 
 ## Deliverables
 
+The server, written in Kotlin is located in src folder. Keeping it in server/ will not operate as I attempted multiple formats and permutations using gradle.
 * `server/` → Kotlin Spring Boot service
 * `db/` → Postgres extension
-* `frontend/` → Python FastAPI (optional UI/tests)
 * README (this document)
 
 ---
