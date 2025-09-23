@@ -21,6 +21,24 @@ server:
   port: 8081
 
 
+logging:
+  level:
+    # root threshold (prod-ready default)
+    root: INFO
+
+    # SQL timings from datasource-proxy
+    net.ttddyy.dsproxy: INFO
+
+    # Spring’s JDBC noise
+    org.springframework.jdbc.core: WARN
+
+    # your app packages: flip to DEBUG when you need deep traces
+    fhir: INFO
+    fhir.controllers: INFO
+    fhir.repositories: INFO
+    fhir.services: INFO
+
+
 management:
   endpoints:
     web:

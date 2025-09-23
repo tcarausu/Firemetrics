@@ -1,0 +1,9 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"app":"fhir-server"}</customFields>
+        </encoder>
+    </appender>
+    <logger name="net.ttddyy.dsproxy.listener.logging" level="INFO"/>
+    <root level="INFO"><appender-ref ref="STDOUT"/></root>
+</configuration>

@@ -1,0 +1,14 @@
+.git
+.github
+.gradle
+build
+out
+**/*.iml
+**/.iml
+**/.vscode
+**/*.log
+**/.idea
+.idea
+Dockerfile
+docker-compose*.yml
+db/init/*.sql

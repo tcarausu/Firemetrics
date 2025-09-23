@@ -7,8 +7,9 @@ The task requires the use of FHIR (Healthcare data), the use of Postgres with pe
 Hence I decided on the use of Kotlin/Spring Boot for the backend. With most early 
 tests (FAST API) done using Postman for easier checks, data collection and debugging.
 
-Minimal FHIR **Patient** service in two stacks (Kotlin 2.1 with Spring Boot on Java 21), backed by
-Postgres 17 (**via a custom extension**). All persistence and queries go through the extension (no direct ORM/Hibernate access).
+Minimal FHIR **Patient** service in Kotlin (Spring Boot, Java 21), backed by PostgreSQL 17 with custom SQL functions and indexes.
+All persistence and queries go through the DB extension layer (no ORM/Hibernate).
+This repo contains split, ordered SQL scripts to provision a clean PostgreSQL database for a minimal FHIR Patient store.
 If I get there in due time I will create a **Rust** version/plugin.
 
 ## Task Objective: 
@@ -59,51 +60,125 @@ SELECT fhir_count('Patient', $jsonb)               -- → long (for pagination) 
 - **birthDate** must be a full date: `YYYY-MM-DD`. Partial dates are not accepted in this slice.
 
 ---
+# Database/Postgresql Setup:
+This repo contains ordered SQL scripts to provision a clean PostgreSQL database.
 
-## How to Run
+### Files & Order
 
+1. `db/00_drop.sql` — terminate sessions, drop DB + role. **Destructive.**
+2. `db/01_bootstrap.sql` — create role + DB, set default `search_path`.
+3. `db/02_schema.sql` — connect to `fhir`, create schema, extensions, tables, grants.
+4. `db/03_indexes.sql` — helper functions + indexes.
+5. `db/04_functions.sql` — PUT/GET/Search functions, shims, grants.
+6. `db/05_smoketests.sql` — quick sanity checks.
 
-### Start Postgres 17
+### Run Manually with `psql`
 
 ```bash
-docker compose up -d
+# Adjust env as needed (Assuming that the postgres port is 5432)
+export PGHOST=localhost PGPORT=5432 PGUSER=postgres
+
+psql -v ON_ERROR_STOP=1 -d postgres -f db/00_drop.sql
+psql -v ON_ERROR_STOP=1 -d postgres -f db/01_bootstrap.sql
+psql -v ON_ERROR_STOP=1 -d fhir     -f db/02_schema.sql
+psql -v ON_ERROR_STOP=1 -d fhir     -f db/03_indexes.sql
+psql -v ON_ERROR_STOP=1 -d fhir     -f db/04_functions.sql
+psql -v ON_ERROR_STOP=1 -d fhir     -f db/05_smoketests.sql
 ```
 
-### Run the server (Kotlin)
+### Notes & Choices
 
-```bash
-./gradlew bootRun
+* **Ownership:** Objects under `fhir_ext` owned by role `fhir`. Public shims granted to `fhir`.
+* **Security:** Avoid `public` schema. Use strong passwords instead of `fhir`.
+* **Extensions:** `pgcrypto`, `pg_trgm` required.
+* **Idempotency:** `IF EXISTS / IF NOT EXISTS` used.
+* **Search Path:** Default `search_path = fhir_ext, public`.
+
+---
+
+## Quickstart (Docker)
+
+### `docker-compose.yml`
+
+```yaml
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/fhir
+      SPRING_DATASOURCE_USERNAME: fhir
+      SPRING_DATASOURCE_PASSWORD: fhir
+      SPRING_DATASOURCE_HIKARI_CONNECTIONINITSQL: "SET search_path = fhir_ext, public"
+
+volumes:
+  pgdata:
 ```
 
-Server will start on `http://localhost:8081`.
-
-### Run the server (Python/FastAPI)
+### Run the Stack
 
 ```bash
-uvicorn main:app --reload --port 8000
+docker compose up --build
+```
+
+* Check health:
+
+  ```bash
+  curl http://localhost:8081/actuator/health
+  ```
+* Check DB contents:
+
+  ```bash
+  docker compose exec -T db psql -U fhir -d fhir -c "select count(*) from fhir_ext.patient_store;"
+  ```
+
+Reset DB & re-seed:
+
+```bash
+docker compose down -v && docker compose up --build
 ```
 
 ---
 
-## How to Test
+## Testing
 
-### Automated tests (Kotlin)
+### Kotlin Tests
 
 ```bash
 ./gradlew test
 ```
 
-### Python tests
+### SQL Smoke Tests
 
 ```bash
-pytest
+docker compose exec -T db psql -U fhir -d fhir -f /docker-entrypoint-initdb.d/05_smoketests.sql
 ```
 
 ---
 
 ## API Examples
 
-### Create a patient
+### Create a Patient
 
 ```bash
 curl -i -H "Content-Type: application/fhir+json" \
@@ -116,22 +191,13 @@ curl -i -H "Content-Type: application/fhir+json" \
   http://localhost:8081/fhir/Patient
 ```
 
-**Response headers:**
-
-```
-HTTP/1.1 201 Created
-Location: /fhir/Patient/550e8400-e29b-41d4-a716-446655440000
-ETag: W/"1"
-Last-Modified: Fri, 19 Sep 2025 10:15:30 GMT
-```
-
-### Get patient by ID
+### Get Patient by ID
 
 ```bash
-curl -s http://localhost:8081/fhir/Patient/550e8400-e29b-41d4-a716-446655440000
+curl -s http://localhost:8081/fhir/Patient/<uuid>
 ```
 
-### Search patients
+### Search Patients
 
 ```bash
 curl -s 'http://localhost:8081/fhir/Patient?name=doe&gender=female&birthdate:ge=1980-01-01&_count=10&_offset=0'
@@ -139,12 +205,63 @@ curl -s 'http://localhost:8081/fhir/Patient?name=doe&gender=female&birthdate:ge=
 
 ---
 
+## CI/CD (GitHub Actions)
+
+```yaml
+name: ci
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - run: ./gradlew test --no-daemon
+
+  publish:
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}/firemetrics
+          tags: |
+            type=raw,value=latest
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+```
+
+---
+
 ## Deliverables
 
 The server, written in Kotlin is located in src folder. Keeping it in server/ will not operate as I attempted multiple formats and permutations using gradle.
-* `server/` → Kotlin Spring Boot service
-* `db/` → Postgres extension
-* README (this document)
+* `src/` → Kotlin Spring Boot service
+* `db/` → Postgres extension scripts
+* `Dockerfile`, `docker-compose.yml`
+* `README.md` (this document)
 
 ---
 

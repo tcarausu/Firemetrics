@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.context.jdbc.Sql
+import org.springframework.test.context.jdbc.SqlConfig
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
@@ -25,8 +26,13 @@ import java.util.UUID
  * Created test suite responsible for testing Get by ID functionality.
  * It contains the integration tests focused ONLY on GET /fhir/Patient/{id}
  * The working/happy path which returns the patient data; including ETag + Last-Modified
- * The 2nd test case contains Mot-found, which then returns OperationOutcome with 404 Status code
+ * The 2nd test case contains Not-found, which then returns OperationOutcome with 404 Status code
  */
+@Sql(
+    scripts = ["classpath:test-clean.sql"],
+    executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD,
+    config = SqlConfig(errorMode = SqlConfig.ErrorMode.CONTINUE_ON_ERROR)
+)
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc

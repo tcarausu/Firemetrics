@@ -38,9 +38,15 @@ dependencies {
     implementation("ca.uhn.hapi.fhir:hapi-fhir-structures-r4b:${hapiVersion}")
     //required for testing. 
     implementation("ca.uhn.hapi.fhir:hapi-fhir-validation:${hapiVersion}")
-
+    implementation("ca.uhn.hapi.fhir:hapi-fhir-validation-resources-r4b:${hapiVersion}")
+    // caching is required, as without it the validator throws:
+    //java.lang.RuntimeException: HAPI-2200: No Cache Service Providers found.
+    // Choose between hapi-fhir-caching-caffeine (Default) and hapi-fhir-caching-guava (Android)
+    implementation("ca.uhn.hapi.fhir:hapi-fhir-caching-caffeine:${hapiVersion}")
     //logging state of the art
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    //SQL timings
+    implementation("net.ttddyy:datasource-proxy:1.10")
 
     runtimeOnly("org.postgresql:postgresql")
 
@@ -49,6 +55,8 @@ dependencies {
     testImplementation("org.testcontainers:postgresql:${testContainerVersion}")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
+
+
 
 tasks.test { useJUnitPlatform() }
 

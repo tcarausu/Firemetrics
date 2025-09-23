@@ -20,6 +20,8 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
 import com.fasterxml.jackson.annotation.JsonInclude
+import fhir.services.FhirValidationService
+import fhir.services.OperationOutcomeFactory
 import fhir.utils.Enums
 
 
@@ -28,7 +30,10 @@ import fhir.utils.Enums
 class PatientController(
     private val repo: PatientRepo,
     private val fhirContext: FhirContext,
+    private val validator: FhirValidationService   // added a validator to data
 ) {
+    private val log = org.slf4j.LoggerFactory.getLogger(PatientController::class.java)
+
     private val mapper = jacksonObjectMapper()
         .findAndRegisterModules()
         .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS) 
@@ -40,6 +45,8 @@ class PatientController(
     )
     fun create(@RequestBody raw: String): ResponseEntity<String> {
         val parser = fhirContext.newJsonParser().setPrettyPrint(false)
+        validator.validatePatient(raw)  // throws IllegalArgumentException on invalid
+
         val patient: Patient = parser.parseResource(Patient::class.java, raw)
 
         require(patient.resourceType == ResourceType.Patient) {
@@ -48,9 +55,11 @@ class PatientController(
 
         // Persist raw payload; DB will normalize id/meta
         val id = repo.put(raw)
+        log.info("Persisted patient $id")
 
         val storedJson = repo.get(id) ?: error("Persisted resource not found: $id")
         val stored: Patient = parser.parseResource(Patient::class.java, storedJson)
+        log.info("Stored patient $id with patient data $storedJson")
 
         // Fallback if there is meta preset.
         if (stored.meta == null || stored.meta.versionId == null || stored.meta.lastUpdated == null) {
@@ -77,9 +86,7 @@ class PatientController(
     fun getPatient(
         @PathVariable id: UUID,
     ): ResponseEntity<String> {
-        val json = repo.get(id) ?: return ResponseEntity.status(404)
-            .contentType(MediaType.parseMediaType("application/fhir+json"))
-            .body("""{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"not-found","diagnostics":"Patient/$id"}]}""")
+        val json = repo.get(id) ?: return OperationOutcomeFactory.notFound("Patient/$id")
 
         val parser = fhirContext.newJsonParser().setPrettyPrint(false)
         val patient: Patient = parser.parseResource(Patient::class.java, json)
@@ -121,12 +128,50 @@ class PatientController(
                         "diagnostics" to "Invalid gender '$gender' (allowed: male|female|other|unknown)")
                 )
             )
+            return OperationOutcomeFactory.badRequestInvalid(
+                "Invalid gender '$gender' (allowed: male|female|other|unknown)",
+                "Patient.gender"
+            )
+        }
+
+        //makes sure it fits the 4 digit- YYYY, MM, DD
+        val dateRE = Regex("""^\d{4}-\d{2}-\d{2}$""")
+        if (birthdate_ge != null && !dateRE.matches(birthdate_ge)) {
+            val oo = mapOf(
+                "resourceType" to "OperationOutcome",
+                "issue" to listOf(mapOf(
+                    "severity" to "error",
+                    "code" to "invalid",
+                    "diagnostics" to "birthdate:ge must be YYYY-MM-DD"
+                ))
+            )
+            return ResponseEntity.badRequest()
+                .contentType(MediaType.parseMediaType("application/fhir+json"))
+                .body(mapper.writeValueAsString(oo))
+        }
+        if (birthdate_le != null && !dateRE.matches(birthdate_le)) {
+            val oo = mapOf(
+                "resourceType" to "OperationOutcome",
+                "issue" to listOf(mapOf(
+                    "severity" to "error",
+                    "code" to "invalid",
+                    "diagnostics" to "birthdate:le must be YYYY-MM-DD"
+                ))
+            )
             return ResponseEntity.badRequest()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
                 .body(mapper.writeValueAsString(oo))
         }
 
-        val params = SearchParams(name, birthdate_ge, birthdate_le, genderEnum, _count, _offset)
+        val params = SearchParams(
+            name = name,
+            birthdate_ge = birthdate_ge,
+            birthdate_le = birthdate_le,
+            gender = genderEnum,
+            _count = _count.coerceIn(1, 100),
+            _offset = _offset
+        )
+
         val page = repo.search(params)
 
         val selfUrl = "/fhir/Patient?" +
