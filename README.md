@@ -1,10 +1,10 @@
-# Firemetrics FHIR (R4B) – Patient (Kotlin) 
+# Firemetrics FHIR (R4B) – Patient (Kotlin)
 
-The Goal for this project is/was to create a solution usable in the context of Firemetrics using the 2 languages I felt 
+The Goal for this project is/was to create a solution usable in the context of Firemetrics using the 2 languages I felt
 most comfortable with (Kotlin/Java).
 
-The task requires the use of FHIR (Healthcare data), the use of Postgres with personally created/developed Extensions. 
-Hence I decided on the use of Kotlin/Spring Boot for the backend. With most early 
+The task requires the use of FHIR (Healthcare data), the use of Postgres with personally created/developed Extensions.
+Hence I decided on the use of Kotlin/Spring Boot for the backend. With most early
 tests (FAST API) done using Postman for easier checks, data collection and debugging.
 
 Minimal FHIR **Patient** service in Kotlin (Spring Boot, Java 21), backed by PostgreSQL 17 with custom SQL functions and indexes.
@@ -12,9 +12,9 @@ All persistence and queries go through the DB extension layer (no ORM/Hibernate)
 This repo contains split, ordered SQL scripts to provision a clean PostgreSQL database for a minimal FHIR Patient store.
 If I get there in due time I will create a **Rust** version/plugin.
 
-## Task Objective: 
+## Task Objective:
 
-Build a small FHIR server for the [**Patient**](https://hl7.org/fhir/R4B/patient.html) resource that showcases your full‑stack skills: a HTTP service,PostgreSQL 
+Build a small FHIR server for the [**Patient**](https://hl7.org/fhir/R4B/patient.html) resource that showcases your full‑stack skills: a HTTP service,PostgreSQL
 with a custom extension, FHIR REST API with search and pagination.
 
 ## Requirements
@@ -22,7 +22,7 @@ with a custom extension, FHIR REST API with search and pagination.
 ### Functional Scope:
 * Implement a minimal FHIR R4B compliant API for Patient with:
 
-  - `POST /fhir/Patient` — create **Patient**, assign `ID`, set `meta.versionId=1` & `meta.lastUpdated`, return `Location`, 
+  - `POST /fhir/Patient` — create **Patient**, assign `ID`, set `meta.versionId=1` & `meta.lastUpdated`, return `Location`,
 `ETag`, `Last-Modified`.
   - `GET /fhir/Patient/{id}` — fetch by id.
   - `GET /fhir/Patient?name=...&birthdate=...&gender=...&_count=...&_offset=...` — search with stable pagination.
@@ -204,55 +204,131 @@ curl -s 'http://localhost:8081/fhir/Patient?name=doe&gender=female&birthdate:ge=
 ```
 
 ---
+## Working docker compose setup
+```bash
+docker compose down -v
+docker compose up --build
+
+docker compose exec -T db psql -U fhir -d fhir -f /docker-entrypoint-initdb.d/05_smoketests.sql
+
+```
+Upon completing this, you should see the following:
+Run either through curl or Postman, as I prefer Postman and easier solution.
+---
 
 ## CI/CD (GitHub Actions)
 
 ```yaml
-name: ci
+name: CI (build + ephemeral run)
+
 on:
-  push:
-    branches: [ "**" ]
-  pull_request:
+    push:
+        branches: [ master ]
+    pull_request:
+        branches: [ master ]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - run: ./gradlew test --no-daemon
+    build-test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
 
-  publish:
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@v5
-        id: meta
-        with:
-          images: ghcr.io/${{ github.repository }}/firemetrics
-          tags: |
-            type=raw,value=latest
-            type=sha
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK 21
+              uses: actions/setup-java@v4
+              with:
+                  distribution: temurin
+                  java-version: '21'
+
+            - name: Cache Gradle
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+                  restore-keys: ${{ runner.os }}-gradle-
+
+            - name: Make Gradlew executable
+              run: chmod +x gradlew
+
+            - name: Spotless check
+              run: ./gradlew spotlessCheck --no-daemon
+
+            - name: Clean + build (runs tests)
+              run: |
+                  chmod +x gradlew
+                  ./gradlew clean build --no-daemon
+
+    compose-smoke:
+        needs: build-test
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+
+        steps:
+            - uses: actions/checkout@v4
+
+            # build & run your stack on the runner using your docker-compose.yml
+            - name: Start stack (detached)
+              run: docker compose -f docker-compose.yml up -d --build
+
+            - name: Health check
+              run: |
+                  for i in {1..30}; do
+                    if curl -fsS http://localhost:8081/actuator/health | grep -q '"status":"UP"'; then
+                      echo "App is UP"; exit 0
+                    fi
+                    echo "Waiting for app... ($i)"; sleep 5
+                  done
+                  echo "App did not become healthy"; docker compose logs; exit 1
+
+            - name: Collect logs
+              if: always()
+              run: |
+                  mkdir -p logs
+                  docker compose logs > logs/compose.log || true
+
+            - name: Upload logs artifact
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: compose-logs
+                  path: logs
+
+            - name: Tear down
+              if: always()
+              run: docker compose -f docker-compose.yml down -v --remove-orphans
+
 ```
+### Index verification (EXPLAIN)
 
+Run:
+```bash
+docker compose exec -T db psql -U fhir -d fhir -f /docker-entrypoint-initdb.d/06_explain.sql
+```
+## EXPLAIN Examples
+
+To verify index usage and stable pagination, you can run the following SQLs
+against the `fhir` database (Postgres 17). These correspond to the indexes
+defined in `03_indexes.sql`.
+
+### Example of Explain forEnd to end search
+```sql
+EXPLAIN (ANALYZE, BUFFERS, TIMING)
+SELECT * FROM fhir_ext.fhir_search(
+    'Patient',
+    '{
+       "name":"doe",
+       "gender":"female",
+       "birthdate_ge":"1980-01-01",
+       "birthdate_le":"1990-12-31",
+       "_count":10,
+       "_offset":0
+     }'::jsonb
+);
+
+```
 ---
 
 ## Deliverables
@@ -270,4 +346,23 @@ The server, written in Kotlin is located in src folder. Keeping it in server/ wi
 * **FHIR R4B Patient (v4.3.0):** [https://hl7.org/fhir/R4B/patient.html](https://hl7.org/fhir/R4B/patient.html)
 * **Postgres 17**
 * **PGRX extension framework**
+
+
+## PS - Upgrades
+If the solution is later updated to release 1.1, I will have to update the format of the SQL scripts.:
+
+* fhir_ext--1.0--1.1.sql → script that upgrades an existing 1.0 install to 1.1.
+* fhir_ext--1.1.sql → full install script for a fresh DB.
+
+
+## CI/CD Badge
+
+[![CI][ci-badge]][ci-link] (missing deployment)
+[![CI/CD][cicd-badge]][cicd-link]
+
+[ci-badge]: https://github.com/tcarausu/Firemetrics/actions/workflows/ci.yml/badge.svg
+[ci-link]: https://github.com/tcarausu/Firemetrics/actions/workflows/ci.yml
+
+[cicd-badge]: https://github.com/tcarausu/Firemetrics/actions/workflows/main.yml/badge.svg
+[cicd-link]: https://github.com/tcarausu/Firemetrics/actions/workflows/main.yml
 

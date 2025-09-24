@@ -9,7 +9,8 @@ class Enums {
         MALE("male"),
         FEMALE("female"),
         OTHER("other"),
-        UNKNOWN("unknown");
+        UNKNOWN("unknown"),
+        ;
 
         @JsonValue
         fun toJson(): String = code
@@ -21,9 +22,7 @@ class Enums {
                 AdministrativeGender.entries.firstOrNull { it.code == v?.lowercase(Locale.ROOT) }
                     ?: throw IllegalArgumentException("Invalid gender '$v' (allowed: male|female|other|unknown)")
 
-
-            private inline fun <reified T> Array<T>.firstOrDefault(pred: (T) -> Boolean): T? =
-                this.firstOrNull(pred)
+            private inline fun <reified T> Array<T>.firstOrDefault(pred: (T) -> Boolean): T? = this.firstOrNull(pred)
         }
     }
 }

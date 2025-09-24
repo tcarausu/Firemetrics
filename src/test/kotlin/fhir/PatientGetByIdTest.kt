@@ -31,25 +31,25 @@ import java.util.UUID
 @Sql(
     scripts = ["classpath:test-clean.sql"],
     executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD,
-    config = SqlConfig(errorMode = SqlConfig.ErrorMode.CONTINUE_ON_ERROR)
+    config = SqlConfig(errorMode = SqlConfig.ErrorMode.CONTINUE_ON_ERROR),
 )
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PatientGetByIdTest {
-
     @Autowired lateinit var mvc: MockMvc
     private val mapper = jacksonObjectMapper().findAndRegisterModules()
 
     companion object {
         @Container
-        private val pg = PostgreSQLContainer<Nothing>("postgres:17-alpine").apply {
-            withDatabaseName("fhir")
-            withUsername("fhir")
-            withPassword("fhir")
-            withInitScript("test-init.sql")
-        }
+        private val pg =
+            PostgreSQLContainer<Nothing>("postgres:17-alpine").apply {
+                withDatabaseName("fhir")
+                withUsername("fhir")
+                withPassword("fhir")
+                withInitScript("test-init.sql")
+            }
 
         @JvmStatic
         @DynamicPropertySource
@@ -61,28 +61,31 @@ class PatientGetByIdTest {
         }
     }
 
-    private fun newPatientJson() = """
-      {
-        "resourceType": "Patient",
-        "name": [{"family": "Smith", "given": ["John"]}],
-        "gender": "male",
-        "birthDate": "1979-09-01"
-      }
-    """.trimIndent()
+    private fun newPatientJson() =
+        """
+        {
+          "resourceType": "Patient",
+          "name": [{"family": "Smith", "given": ["John"]}],
+          "gender": "male",
+          "birthDate": "1979-09-01"
+        }
+        """.trimIndent()
 
     @Test
     fun get_by_id_returns_patient_with_headers() {
-        val created = mvc.post("/fhir/Patient") {
-            contentType = MediaType.valueOf("application/fhir+json")
-            accept = MediaType.valueOf("application/fhir+json")
-            content = newPatientJson()
-        }.andReturn().response
+        val created =
+            mvc.post("/fhir/Patient") {
+                contentType = MediaType.valueOf("application/fhir+json")
+                accept = MediaType.valueOf("application/fhir+json")
+                content = newPatientJson()
+            }.andReturn().response
 
         val id = created.getHeader("Location")!!.substringAfterLast('/')
 
-        val res = mvc.get("/fhir/Patient/$id") {
-            accept = MediaType.valueOf("application/fhir+json")
-        }.andReturn().response
+        val res =
+            mvc.get("/fhir/Patient/$id") {
+                accept = MediaType.valueOf("application/fhir+json")
+            }.andReturn().response
 
         assertEquals(200, res.status)
         assertEquals("W/\"1\"", res.getHeader("ETag"))
@@ -96,9 +99,10 @@ class PatientGetByIdTest {
     @Test
     fun get_missing_returns_operation_outcome_404() {
         val randomId = UUID.randomUUID()
-        val res = mvc.get("/fhir/Patient/$randomId") {
-            accept = MediaType.valueOf("application/fhir+json")
-        }.andReturn().response
+        val res =
+            mvc.get("/fhir/Patient/$randomId") {
+                accept = MediaType.valueOf("application/fhir+json")
+            }.andReturn().response
 
         assertEquals(404, res.status)
         val oo: JsonNode = mapper.readTree(res.contentAsString)

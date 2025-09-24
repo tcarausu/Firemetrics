@@ -1,6 +1,9 @@
 services:
   db:
-    image: postgres:17-alpine
+    image: firemetrics-postgres:local
+    build:
+      context: .
+      dockerfile: db/Dockerfile.postgres
     environment:
       # Realised this is required to setup things properly using superuser for initial scripts
       POSTGRES_USER: postgres
@@ -14,7 +17,6 @@ services:
       retries: 20
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db:/docker-entrypoint-initdb.d:ro
 
   app:
     build: .

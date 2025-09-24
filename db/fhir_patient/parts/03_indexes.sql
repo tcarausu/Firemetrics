@@ -1,5 +1,4 @@
 -- Setting here the helper functions and  indecies for Patient search (similarly fhir db).
-\c fhir
 SET ROLE fhir;
 
 -- Case-insensitive gender lookup

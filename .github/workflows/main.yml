@@ -29,6 +29,12 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
+      - name: Make Gradlew executable
+        run: chmod +x gradlew
+
+      - name: Spotless check
+        run: ./gradlew spotlessCheck --no-daemon
+
       - name: Clean + build (runs tests)
         run: |
           chmod +x gradlew

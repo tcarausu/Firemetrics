@@ -1,28 +1,27 @@
 -- FHIR Patient functions for: put, search, get + public shims (same db)
-\c fhir
 SET ROLE fhir;
 
 -- === Guard: ensure helper functions exist (idempotent) ===
-CREATE OR REPLACE FUNCTION fhir_ext.birthdate_of(p jsonb)
-RETURNS date LANGUAGE sql IMMUTABLE AS $$
-SELECT CASE
-           WHEN p ? 'birthDate' AND (p->>'birthDate') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-           THEN to_date(p->>'birthDate', 'YYYY-MM-DD')
-         ELSE NULL::date
-END
-$$;
-
-CREATE OR REPLACE FUNCTION fhir_ext.flatten_name(p jsonb)
-RETURNS text LANGUAGE sql IMMUTABLE AS $$
-WITH fam AS (
-  SELECT string_agg(trim(both '"' FROM x::text), ' ')
-  FROM jsonb_path_query_array(p, '$.name[*].family') AS t(x)
-), giv AS (
-  SELECT string_agg(trim(both '"' FROM x::text), ' ')
-  FROM jsonb_path_query_array(p, '$.name[*].given[*]') AS t(x)
-)
-SELECT lower(coalesce((SELECT * FROM fam), '') || ' ' || coalesce((SELECT * FROM giv), ''));
-$$;
+-- CREATE OR REPLACE FUNCTION fhir_ext.birthdate_of(p jsonb)
+-- RETURNS date LANGUAGE sql IMMUTABLE AS $$
+-- SELECT CASE
+--            WHEN p ? 'birthDate' AND (p->>'birthDate') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+--            THEN to_date(p->>'birthDate', 'YYYY-MM-DD')
+--          ELSE NULL::date
+-- END
+-- $$;
+--
+-- CREATE OR REPLACE FUNCTION fhir_ext.flatten_name(p jsonb)
+-- RETURNS text LANGUAGE sql IMMUTABLE AS $$
+-- WITH fam AS (
+--   SELECT string_agg(trim(both '"' FROM x::text), ' ')
+--   FROM jsonb_path_query_array(p, '$.name[*].family') AS t(x)
+-- ), giv AS (
+--   SELECT string_agg(trim(both '"' FROM x::text), ' ')
+--   FROM jsonb_path_query_array(p, '$.name[*].given[*]') AS t(x)
+-- )
+-- SELECT lower(coalesce((SELECT * FROM fam), '') || ' ' || coalesce((SELECT * FROM giv), ''));
+-- $$;
 -- === End guard ===
 
 
@@ -160,13 +159,41 @@ $$;
 
 CREATE OR REPLACE FUNCTION fhir_ext.fhir_count(resource text, filters jsonb)
 RETURNS bigint LANGUAGE sql STABLE AS $$
-SELECT coalesce(max(s.total), 0)::bigint FROM fhir_ext.fhir_search(resource, filters) s;
+WITH no_page AS (SELECT (filters - '_count' - '_offset') AS f)
+SELECT COALESCE((SELECT max(s.total) FROM fhir_ext.fhir_search(resource, (SELECT f FROM no_page)) s),0)::bigint;
 $$;
+
 
 CREATE OR REPLACE FUNCTION public.fhir_count(resource text, filters jsonb)
 RETURNS bigint LANGUAGE sql STABLE AS $$
 SELECT fhir_ext.fhir_count(resource, filters);
 $$;
+
+
+-- Search wrapper: accepts JSON parameters and returns SETOF uuid (only ids).
+-- JSON params -> SETOF uuid
+CREATE OR REPLACE FUNCTION public.fhir_search(
+  p_resource_type text,
+  p_params jsonb
+) RETURNS SETOF uuid LANGUAGE sql STABLE AS $$
+SELECT s.id
+FROM fhir_ext.fhir_search(p_resource_type, p_params) AS s(id, total);
+$$;
+
+-- An extra shim to have exactly the set of uuid instead of both uuid and total count.
+-- ($param,$op,$value) -> SETOF uuid
+CREATE OR REPLACE FUNCTION public.fhir_search(p_resource_type text, p_param text, p_op text, p_value text)
+RETURNS SETOF uuid LANGUAGE sql STABLE AS $$
+SELECT *
+FROM public.fhir_search(p_resource_type, jsonb_build_object(
+        CASE
+            WHEN p_op IN ('ge','le') THEN p_param || '_' || p_op
+            ELSE p_param
+            END,
+        p_value)
+     );
+$$;
+
 
 
 -- Restrict execution to app role

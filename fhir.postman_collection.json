@@ -1,0 +1,130 @@
+{
+	"info": {
+		"_postman_id": "a5290750-5508-4b78-9cab-157fc16461c4",
+		"name": "fhir",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "2936326"
+	},
+	"item": [
+		{
+			"name": "Patient Post",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"resourceType\": \"Patient\",\r\n  \"name\": [{ \"family\": \"Jose\", \"given\": [\"Jane\"] }],\r\n  \"gender\": \"female\",\r\n  \"birthDate\": \"1975-04-12\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/fhir/Patient",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"fhir",
+						"Patient"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Patient - Search with Pagination",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/fhir/Patient?name=Jane&gender=female&birthdate:ge=1970-01-01&birthdate:le=2025-12-31&_count=5&_offset=0",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"fhir",
+						"Patient"
+					],
+					"query": [
+						{
+							"key": "name",
+							"value": "Jane"
+						},
+						{
+							"key": "gender",
+							"value": "female"
+						},
+						{
+							"key": "birthdate:ge",
+							"value": "1970-01-01"
+						},
+						{
+							"key": "birthdate:le",
+							"value": "2025-12-31"
+						},
+						{
+							"key": "_count",
+							"value": "5"
+						},
+						{
+							"key": "_offset",
+							"value": "0"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Patient Get by id",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/fhir/Patient/89da0089-1b70-4d21-b7fa-116438d6a8ab",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"fhir",
+						"Patient",
+						"89da0089-1b70-4d21-b7fa-116438d6a8ab"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

@@ -1,0 +1,21 @@
+# base
+FROM postgres:17-alpine
+
+# tools to build extension
+RUN apk add --no-cache make postgresql-dev
+
+# copy only the extension sources
+COPY db/fhir_patient /usr/src/fhir_patient
+
+# build the DATA file and install via PGXS
+RUN make -C /usr/src/fhir_patient clean \
+ && make -C /usr/src/fhir_patient \
+ && make -C /usr/src/fhir_patient install
+
+# prove the extension files are installed (optional)
+# RUN ls -l /usr/local/share/postgresql/extension/fhir_patient*
+
+# copy only the init files we want to auto-run
+COPY db/init/01-create-db.sql            /docker-entrypoint-initdb.d/
+COPY db/init/02-create-extension.sh      /docker-entrypoint-initdb.d/
+RUN find /docker-entrypoint-initdb.d -type f -name "*.sh" -exec sed -i 's/\r$//' {} \; -exec chmod +x {} \;

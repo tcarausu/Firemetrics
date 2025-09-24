@@ -1,16 +1,18 @@
+@file:Suppress("ktlint:standard:no-wildcard-imports")
+
 package fhir.controllers
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-
 import ca.uhn.fhir.context.FhirContext
-import org.hl7.fhir.r4b.model.Patient
-import org.hl7.fhir.r4b.model.Meta
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import fhir.models.SearchParams
-import java.util.Date
-import org.hl7.fhir.r4b.model.OperationOutcome
-import org.hl7.fhir.r4b.model.ResourceType
-
 import fhir.repositories.PatientRepo
+import fhir.services.FhirValidationService
+import fhir.services.OperationOutcomeFactory
+import fhir.utils.Enums
+import org.hl7.fhir.r4b.model.Meta
+import org.hl7.fhir.r4b.model.Patient
+import org.hl7.fhir.r4b.model.ResourceType
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -18,34 +20,34 @@ import org.springframework.web.bind.annotation.*
 import java.net.URI
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.util.Date
 import java.util.UUID
-import com.fasterxml.jackson.annotation.JsonInclude
-import fhir.services.FhirValidationService
-import fhir.services.OperationOutcomeFactory
-import fhir.utils.Enums
-
 
 @RestController
 @RequestMapping("/fhir/Patient")
 class PatientController(
     private val repo: PatientRepo,
     private val fhirContext: FhirContext,
-    private val validator: FhirValidationService   // added a validator to data
+    // added a validator to data
+    private val validator: FhirValidationService,
 ) {
     private val log = org.slf4j.LoggerFactory.getLogger(PatientController::class.java)
 
-    private val mapper = jacksonObjectMapper()
-        .findAndRegisterModules()
-        .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS) 
-        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+    private val mapper =
+        jacksonObjectMapper()
+            .findAndRegisterModules()
+            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
 
     @PostMapping(
         consumes = ["application/fhir+json", MediaType.APPLICATION_JSON_VALUE],
-        produces = ["application/fhir+json", MediaType.APPLICATION_JSON_VALUE]
+        produces = ["application/fhir+json", MediaType.APPLICATION_JSON_VALUE],
     )
-    fun create(@RequestBody raw: String): ResponseEntity<String> {
+    fun create(
+        @RequestBody raw: String,
+    ): ResponseEntity<String> {
         val parser = fhirContext.newJsonParser().setPrettyPrint(false)
-        validator.validatePatient(raw)  // throws IllegalArgumentException on invalid
+        validator.validatePatient(raw) // throws IllegalArgumentException on invalid
 
         val patient: Patient = parser.parseResource(Patient::class.java, raw)
 
@@ -81,7 +83,7 @@ class PatientController(
 
     @GetMapping(
         value = ["/{id}"],
-        produces = ["application/fhir+json", MediaType.APPLICATION_JSON_VALUE]
+        produces = ["application/fhir+json", MediaType.APPLICATION_JSON_VALUE],
     )
     fun getPatient(
         @PathVariable id: UUID,
@@ -108,8 +110,6 @@ class PatientController(
             .body(json)
     }
 
-
-
     @GetMapping(produces = ["application/fhir+json", MediaType.APPLICATION_JSON_VALUE])
     fun search(
         @RequestParam(required = false) name: String?,
@@ -121,60 +121,63 @@ class PatientController(
     ): ResponseEntity<String> {
         val genderEnum = runCatching { gender?.let { Enums.AdministrativeGender.fromJson(it) } }.getOrNull()
         if (gender != null && genderEnum == null) {
-            val oo = mapOf(
-                "resourceType" to "OperationOutcome",
-                "issue" to listOf(
-                    mapOf("severity" to "error", "code" to "invalid",
-                        "diagnostics" to "Invalid gender '$gender' (allowed: male|female|other|unknown)")
-                )
-            )
             return OperationOutcomeFactory.badRequestInvalid(
                 "Invalid gender '$gender' (allowed: male|female|other|unknown)",
-                "Patient.gender"
+                "Patient.gender",
             )
         }
 
-        //makes sure it fits the 4 digit- YYYY, MM, DD
+        // makes sure it fits the 4 digit- YYYY, MM, DD
         val dateRE = Regex("""^\d{4}-\d{2}-\d{2}$""")
         if (birthdate_ge != null && !dateRE.matches(birthdate_ge)) {
-            val oo = mapOf(
-                "resourceType" to "OperationOutcome",
-                "issue" to listOf(mapOf(
-                    "severity" to "error",
-                    "code" to "invalid",
-                    "diagnostics" to "birthdate:ge must be YYYY-MM-DD"
-                ))
-            )
+            val oo =
+                mapOf(
+                    "resourceType" to "OperationOutcome",
+                    "issue" to
+                        listOf(
+                            mapOf(
+                                "severity" to "error",
+                                "code" to "invalid",
+                                "diagnostics" to "birthdate:ge must be YYYY-MM-DD",
+                            ),
+                        ),
+                )
             return ResponseEntity.badRequest()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
                 .body(mapper.writeValueAsString(oo))
         }
         if (birthdate_le != null && !dateRE.matches(birthdate_le)) {
-            val oo = mapOf(
-                "resourceType" to "OperationOutcome",
-                "issue" to listOf(mapOf(
-                    "severity" to "error",
-                    "code" to "invalid",
-                    "diagnostics" to "birthdate:le must be YYYY-MM-DD"
-                ))
-            )
+            val oo =
+                mapOf(
+                    "resourceType" to "OperationOutcome",
+                    "issue" to
+                        listOf(
+                            mapOf(
+                                "severity" to "error",
+                                "code" to "invalid",
+                                "diagnostics" to "birthdate:le must be YYYY-MM-DD",
+                            ),
+                        ),
+                )
             return ResponseEntity.badRequest()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
                 .body(mapper.writeValueAsString(oo))
         }
 
-        val params = SearchParams(
-            name = name,
-            birthdate_ge = birthdate_ge,
-            birthdate_le = birthdate_le,
-            gender = genderEnum,
-            _count = _count.coerceIn(1, 100),
-            _offset = _offset
-        )
+        val params =
+            SearchParams(
+                name = name,
+                birthdate_ge = birthdate_ge,
+                birthdate_le = birthdate_le,
+                gender = genderEnum,
+                _count = _count.coerceIn(1, 100),
+                _offset = _offset,
+            )
 
         val page = repo.search(params)
 
-        val selfUrl = "/fhir/Patient?" +
+        val selfUrl =
+            "/fhir/Patient?" +
                 (name?.let { "name=$it&" } ?: "") +
                 (gender?.let { "gender=$it&" } ?: "") +
                 (birthdate_ge?.let { "birthdate:ge=$it&" } ?: "") +
@@ -182,38 +185,43 @@ class PatientController(
                 "_count=$_count&_offset=$_offset"
 
         if (page.total == 0L) {
-            val emptyBundle = mapOf(
-                "resourceType" to "Bundle",
-                "type" to "searchset",
-                "total" to 0,
-                "entry" to emptyList<Any>(),
-                "link" to listOf(mapOf("relation" to "self", "url" to selfUrl))
-            )
+            val emptyBundle =
+                mapOf(
+                    "resourceType" to "Bundle",
+                    "type" to "searchset",
+                    "total" to 0,
+                    "entry" to emptyList<Any>(),
+                    "link" to listOf(mapOf("relation" to "self", "url" to selfUrl)),
+                )
             return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/fhir+json"))
                 .body(mapper.writeValueAsString(emptyBundle))
         }
 
-
         val entries = page.ids.mapNotNull { repo.get(it) }.map { mapper.readTree(it) }
 
         val nextOffset = _offset + _count
-        val links = listOfNotNull(
-            mapOf("relation" to "self", "url" to selfUrl),
-            if (nextOffset < page.total) mapOf(
-                "relation" to "next",
-                "url" to selfUrl.replace("&_offset=$_offset", "&_offset=$nextOffset")
-            ) else null
-        )
+        val links =
+            listOfNotNull(
+                mapOf("relation" to "self", "url" to selfUrl),
+                if (nextOffset < page.total) {
+                    mapOf(
+                        "relation" to "next",
+                        "url" to selfUrl.replace("&_offset=$_offset", "&_offset=$nextOffset"),
+                    )
+                } else {
+                    null
+                },
+            )
 
-
-        val bundle = mapOf(
-            "resourceType" to "Bundle",
-            "type" to "searchset",
-            "total" to page.total,
-            "entry" to entries.map { mapOf("resource" to it) },
-            "link" to links
-        )
+        val bundle =
+            mapOf(
+                "resourceType" to "Bundle",
+                "type" to "searchset",
+                "total" to page.total,
+                "entry" to entries.map { mapOf("resource" to it) },
+                "link" to links,
+            )
 
         val json = mapper.writeValueAsString(bundle)
         return ResponseEntity.ok()
@@ -221,4 +229,3 @@ class PatientController(
             .body(json)
     }
 }
-

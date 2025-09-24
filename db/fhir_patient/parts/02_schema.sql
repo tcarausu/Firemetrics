@@ -1,6 +1,5 @@
 -- Will use to store the schema, extensions, table, privileges (for cleaner setup)
 -- Run against the fhir database; we just created.
-\c fhir
 
 -- Lock down public schema in this DB  -- (ONLY admin context)
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;

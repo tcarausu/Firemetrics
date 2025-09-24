@@ -39,9 +39,13 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x gradlew
 
+      - name: Spotless check
+        run: ./gradlew spotlessCheck --no-daemon
+
       - name: Clean + build (runs tests)
         run: ./gradlew clean build --no-daemon
         # Your Testcontainers-based tests spin up Postgres automatically
+
 
   publish-image:
     if: github.ref == 'refs/heads/master'

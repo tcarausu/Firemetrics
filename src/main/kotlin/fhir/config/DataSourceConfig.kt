@@ -1,11 +1,11 @@
 package fhir.config
 
 import net.ttddyy.dsproxy.support.ProxyDataSourceBuilder
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import javax.sql.DataSource
-import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties
 import org.springframework.context.annotation.Profile
+import javax.sql.DataSource
 
 @Profile("!test")
 @Configuration

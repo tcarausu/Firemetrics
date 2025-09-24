@@ -1,5 +1,4 @@
 -- Direct db smoke tests, for quick sanity checks. can be run even on an empty DB.
-\c fhir
 -- Basic search calls
 SELECT * FROM fhir_search('Patient', '{"name":"doe","_count":10,"_offset":0}'::jsonb);
 
@@ -26,6 +25,8 @@ SELECT * FROM fhir_search('Patient', '{"gender":"female"}'::jsonb);
 SELECT * FROM fhir_search('Patient', '{"birthdate_ge":"1980-01-01","birthdate_le":"1990-12-31"}'::jsonb);
 SELECT * FROM fhir_search('Patient', '{"name":"doe","gender":"female","birthdate_ge":"1980-01-01","birthdate_le":"1990-12-31"}'::jsonb);
 SELECT * FROM fhir_search('Patient', '{"birthdate":"ge1980-01-01","_count":1}'::jsonb);
+SELECT * FROM fhir_search('Patient', 'birthdate', 'ge', '1980-01-01');
+
 
 -- Count wrappers
 SELECT fhir_ext.fhir_count('Patient', '{}'::jsonb);

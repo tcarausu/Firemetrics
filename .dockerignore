@@ -1,14 +1,9 @@
+# keep db sql/control/makefiles INCLUDED
+# ignore usual junk only
 .git
-.github
+.gitignore
 .gradle
 build
 out
-**/*.iml
-**/.iml
-**/.vscode
-**/*.log
-**/.idea
-.idea
-Dockerfile
-docker-compose*.yml
-db/init/*.sql
+**/.DS_Store
+**/Thumbs.db

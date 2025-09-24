@@ -35,25 +35,25 @@ import java.util.UUID
 @Sql(
     scripts = ["classpath:test-clean.sql"],
     executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD,
-    config = SqlConfig(errorMode = SqlConfig.ErrorMode.CONTINUE_ON_ERROR)
+    config = SqlConfig(errorMode = SqlConfig.ErrorMode.CONTINUE_ON_ERROR),
 )
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PatientCreateTest {
-
     @Autowired lateinit var mvc: MockMvc
     private val mapper = jacksonObjectMapper().findAndRegisterModules()
 
     companion object {
         @Container
-        private val pg = PostgreSQLContainer<Nothing>("postgres:17-alpine").apply {
-            withDatabaseName("fhir")
-            withUsername("fhir")
-            withPassword("fhir")
-            withInitScript("test-init.sql")
-        }
+        private val pg =
+            PostgreSQLContainer<Nothing>("postgres:17-alpine").apply {
+                withDatabaseName("fhir")
+                withUsername("fhir")
+                withPassword("fhir")
+                withInitScript("test-init.sql")
+            }
 
         @JvmStatic
         @DynamicPropertySource
@@ -69,30 +69,34 @@ class PatientCreateTest {
         given: String = "Jane",
         family: String = "Doe",
         gender: String = "female",
-        birthDate: String = "1985-02-17"
+        birthDate: String = "1985-02-17",
     ) = """
-      {
-        "resourceType": "Patient",
-        "name": [{"family": "$family", "given": ["$given"]}],
-        "gender": "$gender",
-        "birthDate": "$birthDate"
-      }
-    """.trimIndent()
+        {
+          "resourceType": "Patient",
+          "name": [{"family": "$family", "given": ["$given"]}],
+          "gender": "$gender",
+          "birthDate": "$birthDate"
+        }
+        """.trimIndent()
 
     // With the creation process cross-checking/assert the HTTP status of 201 (Created)
     @Test
     fun create_patient_assigns_id_and_sets_headers_and_meta() {
-        val res = mvc.post("/fhir/Patient") {
-            contentType = MediaType.valueOf("application/fhir+json")
-            accept = MediaType.valueOf("application/fhir+json")
-            content = newPatientJson()
-        }.andReturn().response
+        val res =
+            mvc.post("/fhir/Patient") {
+                contentType = MediaType.valueOf("application/fhir+json")
+                accept = MediaType.valueOf("application/fhir+json")
+                content = newPatientJson()
+            }.andReturn().response
 
         // HTTP status + headers
         assertEquals(201, res.status)
-        val loc = res.getHeader("Location"); val etag = res.getHeader("ETag");
+        val loc = res.getHeader("Location")
+        val etag = res.getHeader("ETag")
         val lm = res.getHeader("Last-Modified")
-        assertNotNull(loc); assertNotNull(etag); assertNotNull(lm)
+        assertNotNull(loc)
+        assertNotNull(etag)
+        assertNotNull(lm)
         assertEquals("W/\"1\"", etag)
 
         // Location id is a UUID
@@ -110,24 +114,27 @@ class PatientCreateTest {
         DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(lastUpdated) // parse/format sanity
     }
 
-    //Test to specifically check the case of incorrect gender (Cross-check using validator)
+    // Test to specifically check the case of incorrect gender (Cross-check using validator)
     @Test
     fun create_patient_rejects_invalid_gender() {
-        val res = mvc.post("/fhir/Patient") {
-            contentType = MediaType.valueOf("application/fhir+json")
-            accept = MediaType.valueOf("application/fhir+json")
-            content = newPatientJson(gender = "females") }.andReturn().response
+        val res =
+            mvc.post("/fhir/Patient") {
+                contentType = MediaType.valueOf("application/fhir+json")
+                accept = MediaType.valueOf("application/fhir+json")
+                content = newPatientJson(gender = "females")
+            }.andReturn().response
         assertEquals(400, res.status)
     }
 
-    //Test to specifically check the case of correct gender (Cross-check using validator)
+    // Test to specifically check the case of correct gender (Cross-check using validator)
     @Test
     fun create_patient_valid_gender() {
-        val res = mvc.post("/fhir/Patient") {
-            contentType = MediaType.valueOf("application/fhir+json")
-            accept = MediaType.valueOf("application/fhir+json")
-            content = newPatientJson(gender = "female") }.andReturn().response
+        val res =
+            mvc.post("/fhir/Patient") {
+                contentType = MediaType.valueOf("application/fhir+json")
+                accept = MediaType.valueOf("application/fhir+json")
+                content = newPatientJson(gender = "female")
+            }.andReturn().response
         assertEquals(201, res.status)
     }
-
 }
