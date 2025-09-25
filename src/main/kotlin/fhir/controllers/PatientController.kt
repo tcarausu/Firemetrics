@@ -47,7 +47,11 @@ class PatientController(
         @RequestBody raw: String,
     ): ResponseEntity<String> {
         val parser = fhirContext.newJsonParser().setPrettyPrint(false)
-        validator.validatePatient(raw) // throws IllegalArgumentException on invalid
+        try {
+            validator.validatePatient(raw)
+        } catch (ex: IllegalArgumentException) {
+            return OperationOutcomeFactory.badRequestInvalid(ex.message ?: "Invalid payload", "Patient")
+        }
 
         val patient: Patient = parser.parseResource(Patient::class.java, raw)
 

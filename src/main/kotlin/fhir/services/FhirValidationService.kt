@@ -29,13 +29,18 @@ class FhirValidationService(private val ctx: FhirContext) {
             }
         }
 
-    fun validatePatient(resource: String) {
+    fun validatePatient(resource: String): Result<Unit> {
         val parser = ctx.newJsonParser()
         val patient = parser.parseResource(Patient::class.java, resource)
         val result: ValidationResult = validator.validateWithResult(patient)
-        if (!result.isSuccessful) {
-            val issues = result.messages.joinToString("; ") { "[${it.severity}] ${it.locationString} - ${it.message}" }
-            throw IllegalArgumentException("FHIR Validation failed: $issues")
+        return if (result.isSuccessful) {
+            Result.success(Unit)
+        } else {
+            val issues =
+                result.messages.joinToString("; ") {
+                    "[${it.severity}] ${it.locationString} - ${it.message}"
+                }
+            Result.failure(IllegalArgumentException("FHIR Validation failed: $issues"))
         }
     }
 }

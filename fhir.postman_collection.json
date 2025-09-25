@@ -36,6 +36,35 @@
 			"response": []
 		},
 		{
+			"name": "Patient Post Idempotent/Update",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"resourceType\": \"Patient\",\r\n  \"id\": \"70ec6446-8d87-467d-bd30-06c173dd1a4d\",\r\n  \"name\": [{ \"family\": \"Jose\", \"given\": [\"Jane\"] }],\r\n  \"gender\": \"female\",\r\n  \"birthDate\": \"1975-04-12\"\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8081/fhir/Patient",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"fhir",
+						"Patient"
+					]
+				}
+			},
+			"response": []
+		},
+		{
 			"name": "Patient - Search with Pagination",
 			"protocolProfileBehavior": {
 				"disableBodyPruning": true
